@@ -1,0 +1,78 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Raspberry Pi File Server</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <h1>🗂️ Raspberry Pi File Server</h1>
+            <div class="header-actions">
+                <button id="refreshBtn" class="btn btn-secondary">🔄 Refresh</button>
+                <button id="settingsBtn" class="btn btn-secondary">⚙️ Settings</button>
+            </div>
+        </header>
+
+        <div id="statsContainer" class="stats">
+            <!-- Stats will be loaded dynamically -->
+        </div>
+
+        <div class="upload-section">
+            <div class="upload-area" id="uploadArea">
+                <h3>📤 Upload Files</h3>
+                <p class="upload-description">Drag files here or click to browse</p>
+                <input type="file" id="fileInput" multiple accept="*/*">
+                <button type="button" id="uploadBtn" class="btn btn-primary">📁 Upload Files</button>
+            </div>
+            <div id="uploadProgress" class="upload-progress hidden">
+                <div class="progress-bar">
+                    <div class="progress-fill" id="progressFill"></div>
+                </div>
+                <span id="progressText">Uploading...</span>
+            </div>
+        </div>
+
+        <div class="file-browser">
+            <div class="browser-header">
+                <h3>📁 Files & Folders</h3>
+                <div class="browser-controls">
+                    <div class="breadcrumb" id="breadcrumb">
+                        <span class="breadcrumb-item active" data-path="">🏠 Home</span>
+                    </div>
+                    <div class="view-controls">
+                        <button id="listViewBtn" class="btn btn-small active">📋 List</button>
+                        <button id="gridViewBtn" class="btn btn-small">🔲 Grid</button>
+                    </div>
+                </div>
+            </div>
+
+            <div id="fileList" class="file-list">
+                <div class="loading">
+                    <div class="spinner"></div>
+                    <p>Loading files...</p>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Modal for confirmations -->
+    <div id="modal" class="modal hidden">
+        <div class="modal-content">
+            <h3 id="modalTitle">Confirm Action</h3>
+            <p id="modalMessage">Are you sure?</p>
+            <div class="modal-actions">
+                <button id="modalCancel" class="btn btn-secondary">Cancel</button>
+                <button id="modalConfirm" class="btn btn-danger">Confirm</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Toast notifications -->
+    <div id="toastContainer" class="toast-container"></div>
+
+    <script src="app.js"></script>
+</body>
+</html>
