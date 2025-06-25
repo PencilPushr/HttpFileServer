@@ -1,13 +1,20 @@
 #pragma once
 
-class StaticFileServer 
-{
+#include <string>
+
+#include "Logger.h"
+#include "HTTP/HttpResponse.h"
+
+class StaticFileServer {
+private:
+    std::string webDirectory;
+    Logger& logger;
+
 public:
     StaticFileServer(const std::string& web_dir, Logger& log);
+
     HttpResponse serveFile(const std::string& path);
 
 private:
-    std::string web_directory;
-    Logger& logger;
     std::string getMimeType(const std::string& filename);
 };

@@ -16,6 +16,10 @@ inline int closeSocket(socket_t socket) { return closesocket(socket); }
 #include <netdb.h>
 #include <sys/socket.h>
 #include <sys/types.h>
+
+#include <netinet/in.h>
+#include <arpa/inet.h>
+
 #define INVALID_SOCKET (-1)
 using socket_t = int;
 inline int closeSocket(socket_t socket) { return close(socket); }

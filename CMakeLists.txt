@@ -19,6 +19,11 @@ file (GLOB_RECURSE SRC_FILES CONFIGURE_DEPENDS
 # Add source to this project's executable.
 add_executable(${PROJECT_NAME} "main.cpp" ${SRC_FILES})
 
+target_include_directories(${PROJECT_NAME} PRIVATE
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_SOURCE_DIR}/3rdParty
+)
+
 if (CMAKE_VERSION VERSION_GREATER 3.12)
   set_property(TARGET RaspberryServer PROPERTY CXX_STANDARD 20)
 endif()

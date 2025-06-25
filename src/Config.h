@@ -1,11 +1,23 @@
 #pragma once
 
-struct Config 
+#include <string>
+#include <fstream>
+
+class Config
 {
-    int port = 8080;
-    std::string root_directory = "./files";
-    std::string web_directory = "./web";
-    bool enable_cors = true;
-    bool enable_logging = true;
-    std::string log_file = "server.log";
+private:
+	int port = 8080;
+	std::string rootDir = "./files";
+	std::string webDir = "./web";
+	std::string logFile = "server.log";
+	bool enable_cors = true;
+	bool enable_logging = true;
+public:
+	Config();
+
+	int GetPort();
+	const std::string* GetRootDir();
+	const std::string* GetWebDir();
+private:
+	bool ParseEnv();
 };

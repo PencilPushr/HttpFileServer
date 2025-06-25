@@ -1,5 +1,7 @@
 #pragma once
 
+namespace fs = std::filesystem;
+
 class FileManager {
 private:
     std::string root_directory;
@@ -15,16 +17,16 @@ public:
         bool is_directory;
         std::string mime_type;
 
-        Json::Value toJson() const {
-            Json::Value obj;
-            obj["name"] = name;
-            obj["path"] = path;
-            obj["size"] = static_cast<Json::UInt64>(size);
-            obj["modified"] = modified;
-            obj["is_directory"] = is_directory;
-            obj["mime_type"] = mime_type;
-            obj["size_formatted"] = formatFileSize(size);
-            return obj;
+        json toJson() const {
+            return json{
+                {"name", name},
+                {"path", path},
+                {"size", size},
+                {"modified", modified},
+                {"is_directory", is_directory},
+                {"mime_type", mime_type},
+                {"size_formatted", formatFileSize(size)}
+            };
         }
     };
 
@@ -142,9 +144,8 @@ public:
         return success;
     }
 
-    Json::Value getStats() {
+    json getStats() {
         std::lock_guard<std::mutex> lock(file_mutex);
-        Json::Value stats;
 
         uint64_t total_size = 0;
         int file_count = 0;
@@ -165,12 +166,12 @@ public:
             logger.error("Error calculating stats: " + std::string(e.what()));
         }
 
-        stats["total_files"] = file_count;
-        stats["total_folders"] = folder_count;
-        stats["total_size"] = static_cast<Json::UInt64>(total_size);
-        stats["total_size_formatted"] = formatFileSize(total_size);
-
-        return stats;
+        return json{
+            {"total_files", file_count},
+            {"total_folders", folder_count},
+            {"total_size", total_size},
+            {"total_size_formatted", formatFileSize(total_size)}
+        };
     }
 
 private:
@@ -219,3 +220,4 @@ private:
         return oss.str();
     }
 };
+
