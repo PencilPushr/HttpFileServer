@@ -12,7 +12,6 @@ private:
 
 public:
     StaticFileServer(const std::string& web_dir, Logger& log);
-
     HttpResponse serveFile(const std::string& path);
 
 private:

@@ -3,6 +3,8 @@
 
 #include <iostream>
 
+#include "Server.h"
+
 int main() {
     try {
         Config config;
@@ -17,7 +19,7 @@ int main() {
     catch (const std::exception& e) 
     {
         std::cerr << "Error: " << e.what() << std::endl;
-        //return 1;
+        return 1;
     }
 
     return 0;

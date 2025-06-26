@@ -1,6 +1,10 @@
 #include "Logger.h"
 
-Logger::Logger(const std::string& filename, bool enable = true) 
+#include <iomanip>
+#include <iostream>
+#include <chrono>
+
+Logger::Logger(const std::string& filename, bool enable) 
     : enabled(enable) 
 {
     if (enabled) 

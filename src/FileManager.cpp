@@ -1,14 +1,31 @@
 #include "FileManager.h"
 
-FileManager::FileManager(const std::string& root, Logger& log) 
+#include <iomanip>
+#include <sstream>
+#include <chrono>
+
+FileManager::FileManager(const std::string& root, Logger& log)
     : root_directory(root)
-    , logger(log) 
+    , logger(log)
 {
     fs::create_directories(root);
     logger.info("FileManager initialized with root: " + root);
 }
 
-std::vector<FileInfo> FileManager::listDirectory(const std::string& relative_path = "") {
+json FileManager::FileInfo::toJson() const
+{
+    return json{
+        {"name", name},
+        {"path", path},
+        {"size", size},
+        {"modified", modified},
+        {"is_directory", is_directory},
+        {"mime_type", mime_type},
+        {"size_formatted", FileManager::formatFileSize(size)}
+    };
+}
+
+std::vector<FileManager::FileInfo> FileManager::listDirectory(const std::string& relative_path) {
     std::lock_guard<std::mutex> lock(file_mutex);
     std::vector<FileInfo> files;
 
@@ -147,7 +164,6 @@ json FileManager::getStats() {
     };
 }
 
-
 bool FileManager::isPathSafe(const std::string& path) const {
     try {
         fs::path canonical_root = fs::canonical(fs::absolute(root_directory));
@@ -178,10 +194,10 @@ std::string FileManager::getMimeType(const std::string& filename) const {
     return it != mime_types.end() ? it->second : "application/octet-stream";
 }
 
-static std::string FileManager::formatFileSize(uint64_t size) {
+std::string FileManager::formatFileSize(uint64_t size) {
     const char* units[] = { "B", "KB", "MB", "GB", "TB" };
     int unit = 0;
-    double s = size;
+    double s = static_cast<double>(size);
 
     while (s >= 1024 && unit < 4) {
         s /= 1024;

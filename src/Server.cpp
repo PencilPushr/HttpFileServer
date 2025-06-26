@@ -1,35 +1,54 @@
-#include <iostream>
-#include <string>
-#include <vector>
-#include <map>
+#include "Server.h"
 #include <filesystem>
-#include <fstream>
-#include <sstream>
-#include <thread>
-#include <mutex>
-#include <regex>
-#include <chrono>
-#include <iomanip>
-
-#include "Socket/SocketStream.h"
+#include <stdexcept>
+#include <iostream>
 
 namespace fs = std::filesystem;
 
+#ifdef _WIN32
+#define close closesocket
+typedef int ssize_t;
+#endif
 
-Server::FileServer(const Config& cfg)
+Server::Server(const Config& cfg)
     : config(cfg)
-    , file_manager(cfg.root_directory, logger)
-    , static_server(cfg.web_directory, logger)
-    , logger(cfg.log_file, cfg.enable_logging) 
-{}
+    , logger(cfg.logFile, cfg.enable_logging)  // Initialize logger first
+    , server_socket(-1)
+    , file_manager(cfg.rootDir, logger)
+    , static_server(cfg.webDir, logger)
+{
+#ifdef _WIN32
+    WSADATA wsaData;
+    if (WSAStartup(MAKEWORD(2, 2), &wsaData) != 0) {
+        throw std::runtime_error("Failed to initialize Winsock");
+    }
+#endif
+    initializeSocket();
+}
 
-void Server::start() {
-    Socket socket(config.port);
-    SocketStream sockstream(socket);
+Server::~Server() {
+    cleanup();
+}
+
+void Server::initializeSocket() {
+    server_socket = socket(AF_INET, SOCK_STREAM, 0);
+    if (server_socket < 0) {
+        throw std::runtime_error("Failed to create socket");
+    }
 
     int opt = 1;
-    setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt));
+#ifdef _WIN32
+    if (setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR,
+        reinterpret_cast<const char*>(&opt), sizeof(opt)) < 0) {
+#else
+    if (setsockopt(server_socket, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)) < 0) {
+#endif
+        close(server_socket);
+        throw std::runtime_error("Failed to set socket options");
+    }
+    }
 
+void Server::start() {
     sockaddr_in address{};
     address.sin_family = AF_INET;
     address.sin_addr.s_addr = INADDR_ANY;
@@ -45,8 +64,8 @@ void Server::start() {
 
     running = true;
     logger.info("File server starting on port " + std::to_string(config.port));
-    logger.info("Serving files from: " + config.root_directory);
-    logger.info("Serving web interface from: " + config.web_directory);
+    logger.info("Serving files from: " + config.rootDir);
+    logger.info("Serving web interface from: " + config.webDir);
 
     while (running) {
         sockaddr_in client_addr{};
@@ -55,19 +74,31 @@ void Server::start() {
 
         if (client_socket >= 0) {
             std::string client_ip = inet_ntoa(client_addr.sin_addr);
-            std::thread(&FileServer::handleClient, this, client_socket, client_ip).detach();
+            std::thread(&Server::handleClient, this, client_socket, client_ip).detach();
+        }
+        else if (running) {
+            logger.error("Failed to accept client connection");
         }
     }
 }
 
 void Server::stop() {
     running = false;
-    close(server_socket);
+    if (server_socket >= 0) {
+        close(server_socket);
+        server_socket = -1;
+    }
     logger.info("Server stopped");
 }
 
+void Server::cleanup() {
+    stop();
+#ifdef _WIN32
+    WSACleanup();
+#endif
+}
 
-void Server::handleClient(int client_socket, const std::string& client_ip) {
+void Server::handleClient(int client_socket, const std::string & client_ip) {
     char buffer[8192];
     ssize_t bytes_read = recv(client_socket, buffer, sizeof(buffer) - 1, 0);
 
@@ -86,13 +117,13 @@ void Server::handleClient(int client_socket, const std::string& client_ip) {
         }
 
         std::string response_str = response.serialize();
-        send(client_socket, response_str.c_str(), response_str.length(), 0);
+        send(client_socket, response_str.c_str(), static_cast<int>(response_str.length()), 0);
     }
 
     close(client_socket);
 }
 
-HttpResponse handleRequest(const HttpRequest& request) {
+HttpResponse Server::handleRequest(const HttpRequest & request) {
     // Handle CORS preflight
     if (request.method == "OPTIONS") {
         HttpResponse response;
@@ -109,8 +140,7 @@ HttpResponse handleRequest(const HttpRequest& request) {
     return static_server.serveFile(request.path);
 }
 
-HttpResponse handleApiRequest(const HttpRequest& request) 
-{
+HttpResponse Server::handleApiRequest(const HttpRequest & request) {
     HttpResponse response;
 
     if (request.path == "/api/files" && request.method == "GET") {
@@ -145,42 +175,34 @@ HttpResponse handleApiRequest(const HttpRequest& request)
             response.setError(404, "File not found or could not be deleted");
         }
     }
-    else if (request.path == "/api/upload" && request.method == "POST") 
-    {
-        // TODO: Implement multipart form parsing
-        response.setError(501, "Upload not yet implemented");
-
-    }
-    else if (request.path == "/api/delete" && request.method == "DELETE") 
-    {
+    else if (request.path.starts_with("/api/download") && request.method == "GET") {
         auto params = request.parseQuery();
-        if (!params.count("file")) 
-        {
+        if (!params.count("file")) {
             response.setError(400, "Missing file parameter");
             return response;
         }
 
-        bool success = file_manager.deleteFile(params.at("file"));
-        if (success) 
-        {
-            Json::Value result;
-            result["success"] = true;
-            result["message"] = "File deleted successfully";
-            response.setJson(result);
-        }
-        else 
-        {
-            response.setError(404, "File not found or could not be deleted");
+        auto fileData = file_manager.readFile(params.at("file"));
+        if (fileData.empty()) {
+            response.setError(404, "File not found");
+            return response;
         }
 
+        // Set appropriate headers for file download
+        response.body = fileData;
+        response.headers["Content-Type"] = "application/octet-stream";
+        response.headers["Content-Disposition"] = "attachment; filename=\"" +
+            fs::path(params.at("file")).filename().string() + "\"";
+        response.status_code = 200;
     }
-    else if (request.path == "/api/stats" && request.method == "GET") 
-    {
+    else if (request.path == "/api/upload" && request.method == "POST") {
+        // TODO: Implement multipart form parsing
+        response.setError(501, "Upload not yet implemented");
+    }
+    else if (request.path == "/api/stats" && request.method == "GET") {
         response.setJson(file_manager.getStats());
-
     }
-    else 
-    {
+    else {
         response.setError(404, "API endpoint not found");
     }
 

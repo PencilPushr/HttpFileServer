@@ -2,7 +2,7 @@
 
 SocketStream::SocketStream(Socket& socket)
         : std::iostream(nullptr)
-        , m_sockbuf(socket.GetSocket())
+        , m_sockbuf(socket.getSocket())
 {
     rdbuf(&m_sockbuf);
 }

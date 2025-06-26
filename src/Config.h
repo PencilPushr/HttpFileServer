@@ -5,7 +5,8 @@
 
 class Config
 {
-private:
+	// Public for now, but these will go back to private in V1.1
+public:
 	int port = 8080;
 	std::string rootDir = "./files";
 	std::string webDir = "./web";
