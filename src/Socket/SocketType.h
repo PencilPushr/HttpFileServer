@@ -8,7 +8,7 @@
 #include <WinSock2.h>
 #include <ws2tcpip.h>
 using socket_t = SOCKET;
-using ssize_t = SSIZE_T;
+using ssize_t = SSIZE_T; // Windows issue.
 inline int closeSocket(socket_t socket) { return closesocket(socket); }
 #pragma comment(lib, "Ws2_32.lib")
 
@@ -66,6 +66,7 @@ public:
         other.m_socket = INVALID_SOCKET;
     }
 
+    // Getter
     socket_t getSocket() const { return m_socket; }
 
     // Move assignment
@@ -187,6 +188,30 @@ private:
     }
 };
 
+/*
+
+    Calling WSAStartup and WSACleanup for each socket will crash the server.
+
+    Upon more careful review, these should only be done once at server construction and destruction.
+    (Previously, this socket class used RAII to call WSA and create a socket... made it impossible to understand why it was not working properly).
+
+    WSAStartup
+        -   Loads and initializes the Winsock DLL (ws2_32.dll) into the process’s address space.
+        -   Sets up internal data structures (memory pools, service provider tables, thread-local data, etc.).
+
+    WSACleanup
+        -   Cleans up all Winsock resources for the process once its internal reference count drops to zero.
+        -   Frees memory, unloads the library, and invalidates all open sockets.
+
+
+    So -> Calling WSACleanup will invalidate still active sockets. 
+    Now you still can call WSA functions as they are ref counted.
+    However; 
+        1. What if 2 threads call WSAStartup and Cleanup? We get race conditions, or we unload the library whilst we are running.
+        2. WSA functions aren't zero-cost; load/unload dll, allocating/freeing memory and TLS.
+
+
+*/
 #ifdef _WIN32
 // Initialize Winsock once for the entire application
 struct WinsockInitializer 

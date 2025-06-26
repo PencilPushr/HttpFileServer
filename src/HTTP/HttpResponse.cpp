@@ -20,7 +20,8 @@ std::string HttpResponse::serialize() const
     headers_copy["Content-Length"] = std::to_string(body.size());
     headers_copy["Server"] = "RaspberryPi-FileServer/1.0";
 
-    for (const auto& [key, value] : headers_copy) {
+    for (const auto& [key, value] : headers_copy) 
+    {
         response << key << ": " << value << "\r\n";
     }
     response << "\r\n";
