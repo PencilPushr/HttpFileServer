@@ -42,7 +42,8 @@ public:
     // Constructor for accepted sockets
     explicit Socket(socket_t sock) : m_socket(sock) 
     {
-        if (m_socket == INVALID_SOCKET) {
+        if (m_socket == INVALID_SOCKET) 
+        {
             throw std::runtime_error("Invalid socket descriptor");
         }
     }
