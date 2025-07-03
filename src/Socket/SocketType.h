@@ -28,10 +28,14 @@ inline int closeSocket(socket_t socket) { return close(socket); }
 
 #endif
 
-class Socket {
+class Socket 
+{
 public:
     // Default constructor
     Socket() : m_socket(INVALID_SOCKET) {}
+
+    static Socket createServerSocket(std::string& ip, std::string& port);
+    static Socket createClientSocket(std::string& ip, std::string& port);
 
     // Constructor to create a new socket
     explicit Socket(int family, int type, int protocol) 
@@ -49,7 +53,7 @@ public:
     }
 
     // Destructor
-    ~Socket() 
+    ~Socket()
     {
         if (m_socket != INVALID_SOCKET) 
         {
@@ -165,8 +169,35 @@ public:
         return buffer;
     }
 
+    // 3. Get client address from accepted socket
+    std::string getRemoteAddress() const {
+        sockaddr_storage addr{};
+        socklen_t len = sizeof(addr);
+
+        if (getpeername(m_socket, (sockaddr*)&addr, &len) == -1) {
+            return "unknown";
+        }
+
+        char ip[INET6_ADDRSTRLEN];
+        if (addr.ss_family == AF_INET) {
+            inet_ntop(AF_INET, &((sockaddr_in*)&addr)->sin_addr, ip, sizeof(ip));
+        }
+        else if (addr.ss_family == AF_INET6) {
+            inet_ntop(AF_INET6, &((sockaddr_in6*)&addr)->sin6_addr, ip, sizeof(ip));
+        }
+
+        return std::string(ip);
+    }
+
 private:
     socket_t m_socket;
+
+    void setReuseAddr()
+    {
+        int opt = 1;
+        int result = setsockopt(m_socket, SOL_SOCKET, SO_REUSEADDR, (const char*)&opt, sizeof(opt));
+        checkError(result, "setsockopt SO_REUSEADDR");
+    }
 
     // Check result and throw exception if an error occurred
     void checkError(int result, const std::string& operation) 
