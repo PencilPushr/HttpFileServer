@@ -164,6 +164,46 @@ json FileManager::getStats() {
     };
 }
 
+bool FileManager::fileExists(const std::string& relative_path) const
+{
+    std::lock_guard<std::mutex> lock(file_mutex);
+    std::string full_path = root_directory + "/" + relative_path;
+
+    if (!isPathSafe(full_path)) {
+        return false;
+    }
+
+    return std::filesystem::exists(full_path);
+}
+
+std::string FileManager::generateUniqueFilename(const std::string& relative_path) const
+{
+    if (!fileExists(relative_path)) {
+        return relative_path;
+    }
+
+    std::filesystem::path path(relative_path);
+    std::string dir = path.parent_path().string();
+    std::string base = path.stem().string();
+    std::string ext = path.extension().string();
+
+    int counter = 1;
+    std::string new_path;
+
+    do {
+        std::string new_filename = base + "_" + std::to_string(counter) + ext;
+        if (!dir.empty()) {
+            new_path = dir + "/" + new_filename;
+        }
+        else {
+            new_path = new_filename;
+        }
+        counter++;
+    } while (fileExists(new_path) && counter < 1000);
+
+    return new_path;
+}
+
 bool FileManager::isPathSafe(const std::string& path) const {
     try {
         fs::path canonical_root = fs::canonical(fs::absolute(root_directory));
@@ -210,3 +250,76 @@ std::string FileManager::formatFileSize(uint64_t size) {
 }
 
 
+FileManager::UploadResult FileManager::uploadFile(const std::string& filename,
+    const std::vector<uint8_t>& data,
+    const std::string& target_dir,
+    bool allow_overwrite)
+{
+    UploadResult result;
+    result.size = data.size();
+
+    // Sanitize filename
+    std::filesystem::path safe_filename = std::filesystem::path(filename).filename();
+
+    // Validate filename
+    if (safe_filename.string().empty() || safe_filename.string().find("..") != std::string::npos) {
+        result.success = false;
+        result.error = "Invalid filename";
+        return result;
+    }
+
+    // Build relative path
+    std::string relative_path;
+    if (!target_dir.empty()) {
+        // Sanitize target directory
+        std::string safe_dir = target_dir;
+        std::replace(safe_dir.begin(), safe_dir.end(), '\\', '/');
+        // Remove leading/trailing slashes
+        if (!safe_dir.empty() && safe_dir.front() == '/') {
+            safe_dir = safe_dir.substr(1);
+        }
+        if (!safe_dir.empty() && safe_dir.back() == '/') {
+            safe_dir.pop_back();
+        }
+
+        if (safe_dir.find("..") != std::string::npos) {
+            result.success = false;
+            result.error = "Invalid directory path";
+            return result;
+        }
+
+        relative_path = safe_dir + "/" + safe_filename.string();
+    }
+    else {
+        relative_path = safe_filename.string();
+    }
+
+    // Handle existing files
+    if (!allow_overwrite && fileExists(relative_path)) {
+        relative_path = generateUniqueFilename(relative_path);
+        safe_filename = std::filesystem::path(relative_path).filename();
+    }
+
+    // Write the file
+    bool success = writeFile(relative_path, data);
+
+    result.success = success;
+    result.relative_path = relative_path;
+    result.final_filename = safe_filename.string();
+
+    if (!success) {
+        result.error = "Failed to write file";
+    }
+
+    return result;
+}
+
+FileManager::UploadResult FileManager::uploadFile(const std::string& filename,
+    const std::string& data,
+    const std::string& target_dir,
+    bool allow_overwrite)
+{
+    // Convert string to vector<uint8_t>
+    std::vector<uint8_t> binary_data(data.begin(), data.end());
+    return uploadFile(filename, binary_data, target_dir, allow_overwrite);
+}

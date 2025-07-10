@@ -10,28 +10,23 @@
 #include "Logger.h"
 
 
-// This will be replaced with Socket wrapper classes in V1.1
-#ifdef _WIN32
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#pragma comment(lib, "ws2_32.lib")
-typedef int socklen_t;
-#else
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <unistd.h>
-#endif
+#include "Socket/SocketStream.h"
 
 class Server
 {
 private:
     Config config;
     Logger logger;  // Initialize logger first
-    int server_socket;
+    Socket m_socket;
     FileManager file_manager;
     StaticFileServer static_server;
     std::atomic<bool> running{ false };
+
+    // Route handler type
+    using RouteHandler = std::function<HttpResponse(const HttpRequest&, Server&)>;
+
+    // Route table: key is "METHOD /path"
+    std::unordered_map<std::string, RouteHandler> routes;
 
 public:
     Server(const Config& cfg);
@@ -40,9 +35,16 @@ public:
     void stop();
 
 private:
-    void handleClient(int client_socket, const std::string& client_ip);
+    void handleClient(Socket client_socket, const std::string& client_ip);
     HttpResponse handleRequest(const HttpRequest& request);
     HttpResponse handleApiRequest(const HttpRequest& request);
     void initializeSocket();
-    void cleanup();
+    void setupRoutes();
+
+    // Individual route handlers
+    HttpResponse handleGetFiles(const HttpRequest& request);
+    HttpResponse handleDeleteFile(const HttpRequest& request);
+    HttpResponse handleDownloadFile(const HttpRequest& request);
+    HttpResponse handleUploadFile(const HttpRequest& request);
+    HttpResponse handleGetStats(const HttpRequest& request);
 };

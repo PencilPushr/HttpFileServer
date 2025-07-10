@@ -34,190 +34,65 @@ public:
     // Default constructor
     Socket() : m_socket(INVALID_SOCKET) {}
 
-    static Socket createServerSocket(std::string& ip, std::string& port);
-    static Socket createClientSocket(std::string& ip, std::string& port);
+    static Socket createServerSocket(const std::string& address, int port, int backlog = 10);
+    static Socket createClientSocket(const std::string& address, int port);
 
-    // Constructor to create a new socket
-    explicit Socket(int family, int type, int protocol) 
-    {
-        create(family, type, protocol);
-    }
+    // Constructor to create a new socket - explicit to avoid constructor shenaningans
+    explicit Socket(int family, int type, int protocol);
 
     // Constructor for accepted sockets
-    explicit Socket(socket_t sock) : m_socket(sock) 
-    {
-        if (m_socket == INVALID_SOCKET) 
-        {
-            throw std::runtime_error("Invalid socket descriptor");
-        }
-    }
+    explicit Socket(socket_t sock);
 
-    // Destructor
-    ~Socket()
-    {
-        if (m_socket != INVALID_SOCKET) 
-        {
-            closeSocket(m_socket);
-        }
-    }
+    ~Socket();
 
     // Delete copy operations
     Socket(const Socket&) = delete;
     Socket& operator=(const Socket&) = delete;
 
     // Move constructor
-    Socket(Socket&& other) noexcept : m_socket(other.m_socket) 
-    {
-        other.m_socket = INVALID_SOCKET;
-    }
+    Socket(Socket&& other) noexcept;
 
-    // Getter
-    socket_t getSocket() const { return m_socket; }
+    socket_t getSocket() const;
 
     // Move assignment
-    Socket& operator=(Socket&& other) noexcept 
-    {
-        if (this != &other) 
-        {
-            if (m_socket != INVALID_SOCKET) 
-            {
-                closeSocket(m_socket);
-            }
-            m_socket = other.m_socket;
-            other.m_socket = INVALID_SOCKET;
-        }
-        return *this;
-    }
+    Socket& operator=(Socket&& other) noexcept;
 
-    // Create a socket
-    void create(int family, int type, int protocol) 
-    {
-        m_socket = socket(family, type, protocol);
-        if (m_socket == INVALID_SOCKET) 
-        {
-            throwError("socket creation");
-        }
-    }
+
+    void create(int family, int type, int protocol);
+    void close();
+
 
     // Bind the socket to an address and port
-    void bind(const std::string& address, int port) 
-    {
-        sockaddr_in addr{};
-        addr.sin_family = AF_INET;
-        addr.sin_port = htons(port);
-        if (inet_pton(AF_INET, address.c_str(), &addr.sin_addr) <= 0) 
-        {
-            throw std::runtime_error("Invalid address");
-        }
-        int result = ::bind(m_socket, (sockaddr*)&addr, sizeof(addr));
-        checkError(result, "bind");
-    }
+    void bind(const std::string& address, int port);
 
     // Listen for incoming connections
-    void listen(int backlog) 
-    {
-        int result = ::listen(m_socket, backlog);
-        checkError(result, "listen");
-    }
+    void listen(int backlog);
 
     // Accept an incoming connection
-    Socket accept() 
-    {
-        sockaddr_in client_addr{};
-        socklen_t client_len = sizeof(client_addr);
-        socket_t client_socket = ::accept(m_socket, (sockaddr*)&client_addr, &client_len);
-
-        if (client_socket == INVALID_SOCKET) 
-        {
-            throwError("accept");
-        }
-
-        return Socket(client_socket);
-    }
+    Socket accept();
 
     // Connect to a remote server
-    void connect(const std::string& address, int port) 
-    {
-        sockaddr_in addr{};
-        addr.sin_family = AF_INET;
-        addr.sin_port = htons(port);
-        if (inet_pton(AF_INET, address.c_str(), &addr.sin_addr) <= 0) 
-        {
-            throw std::runtime_error("Invalid address");
-        }
-        int result = ::connect(m_socket, (sockaddr*)&addr, sizeof(addr));
-        checkError(result, "connect");
-    }
-
-    // Send data
-    void send(const std::string& data) 
-    {
-        int result = ::send(m_socket, data.c_str(), data.size(), 0);
-        checkError(result, "send");
-    }
-
-    // Receive data
-    std::string receive(size_t size) 
-    {
-        std::string buffer(size, '\0');
-        ssize_t bytes_read = ::recv(m_socket, &buffer[0], size, 0);
-        if (bytes_read == -1) 
-        {
-            throwError("receive");
-        }
-        buffer.resize(bytes_read);
-        return buffer;
-    }
+    void connect(const std::string& address, int port);
+    void send(const std::string& data);
+    std::string receive(size_t size);
 
     // 3. Get client address from accepted socket
-    std::string getRemoteAddress() const {
-        sockaddr_storage addr{};
-        socklen_t len = sizeof(addr);
-
-        if (getpeername(m_socket, (sockaddr*)&addr, &len) == -1) {
-            return "unknown";
-        }
-
-        char ip[INET6_ADDRSTRLEN];
-        if (addr.ss_family == AF_INET) {
-            inet_ntop(AF_INET, &((sockaddr_in*)&addr)->sin_addr, ip, sizeof(ip));
-        }
-        else if (addr.ss_family == AF_INET6) {
-            inet_ntop(AF_INET6, &((sockaddr_in6*)&addr)->sin6_addr, ip, sizeof(ip));
-        }
-
-        return std::string(ip);
-    }
+    std::string getRemoteAddress() const;
+    std::string getLocalAddress() const;
+    int getLocalPort() const;
+    int getRemotePort() const;
+    bool isConnected() const;
 
 private:
     socket_t m_socket;
 
-    void setReuseAddr()
-    {
-        int opt = 1;
-        int result = setsockopt(m_socket, SOL_SOCKET, SO_REUSEADDR, (const char*)&opt, sizeof(opt));
-        checkError(result, "setsockopt SO_REUSEADDR");
-    }
+    void setReuseAddr();
 
     // Check result and throw exception if an error occurred
-    void checkError(int result, const std::string& operation) 
-    {
-        if (result == -1) 
-        {
-            throwError(operation);
-        }
-    }
+    void checkError(int result, const std::string& operation);
 
     // Throw an exception with platform-specific error details
-    void throwError(const std::string& operation) 
-    {
-#ifdef _WIN32
-        int err = WSAGetLastError();
-        throw std::runtime_error(operation + " failed with error: " + std::to_string(err));
-#else
-        throw std::runtime_error(operation + " failed with error: " + std::string(strerror(errno)));
-#endif
-    }
+    void throwError(const std::string& operation);
 };
 
 /*
@@ -236,7 +111,7 @@ private:
         -   Frees memory, unloads the library, and invalidates all open sockets.
 
 
-    So -> Calling WSACleanup will invalidate still active sockets. 
+    So -> Calling WSACleanup() in the RAII destructor will invalidate still active sockets. Leading to the crashes. 
     Now you still can call WSA functions as they are ref counted.
     However; 
         1. What if 2 threads call WSAStartup and Cleanup? We get race conditions, or we unload the library whilst we are running.
@@ -265,5 +140,5 @@ struct WinsockInitializer
 
 // This creates a single static instance that initializes at program start
 // and cleans up at program exit
-static WinsockInitializer g_winsockInit;
+inline WinsockInitializer g_winsockInit;
 #endif
