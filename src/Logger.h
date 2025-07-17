@@ -5,7 +5,8 @@
 #include <string>
 
 
-class Logger {
+class Logger 
+{
 private:
     std::ofstream log_file;
     std::mutex log_mutex;

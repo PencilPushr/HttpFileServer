@@ -8,7 +8,8 @@
 #include "json.hpp"
 using json = nlohmann::json;
 
-class HttpResponse {
+class HttpResponse 
+{
 public:
     int status_code = 200;
     std::map<std::string, std::string> headers;

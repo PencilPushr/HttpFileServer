@@ -40,6 +40,7 @@ void Server::setupRoutes()
     routes["GET /api/download"] = [this](const HttpRequest& req, Server&) { return handleDownloadFile(req); };
     routes["POST /api/upload"] = [this](const HttpRequest& req, Server&) { return handleUploadFile(req); };
     routes["GET /api/stats"] = [this](const HttpRequest& req, Server&) { return handleGetStats(req); };
+    routes["GET /api/search"] = [this](const HttpRequest& req, Server&) { return handleSearch(req); };
 }
 
 void Server::start() 
@@ -48,6 +49,7 @@ void Server::start()
     logger.info("File server starting on port " + std::to_string(config.port));
     logger.info("Serving files from: " + config.rootDir);
     logger.info("Serving web interface from: " + config.webDir);
+    logger.info("\n");
 
     while (running) 
     {
@@ -60,6 +62,8 @@ void Server::start()
             {
                 // Get client IP from the Socket object
                 std::string client_ip = client_socket.getRemoteAddress();
+
+                logger.info("Client connected from " + std::string(client_ip));
 
                 // Move the socket into the thread
                 std::thread(&Server::handleClient, this, std::move(client_socket), client_ip).detach();
@@ -83,7 +87,8 @@ void Server::stop()
 
 void Server::handleClient(Socket client_socket, const std::string& client_ip)
 {
-    try {
+    try 
+    {
         // Create a SocketStream for easier I/O
         SocketStream stream(client_socket);
 
@@ -132,7 +137,8 @@ void Server::handleClient(Socket client_socket, const std::string& client_ip)
                 {
                     request.body.resize(content_length);
                     stream.read((char*)request.body.data(), content_length);
-                    if (!stream) {
+                    if (!stream) 
+                    {
                         logger.error("Failed to read request body from " + client_ip);
                         return;
                     }
@@ -260,13 +266,15 @@ HttpResponse Server::handleDownloadFile(const HttpRequest& request)
     HttpResponse response;
     auto params = request.parseQuery();
 
-    if (!params.count("file")) {
+    if (!params.count("file")) 
+    {
         response.setError(400, "Missing file parameter");
         return response;
     }
 
     auto fileData = file_manager.readFile(params.at("file"));
-    if (fileData.empty()) {
+    if (fileData.empty()) 
+    {
         response.setError(404, "File not found");
         return response;
     }
@@ -287,19 +295,49 @@ HttpResponse Server::handleGetStats(const HttpRequest& request)
     return response;
 }
 
+HttpResponse Server::handleSearch(const HttpRequest& request)
+{
+  
+    auto params = request.parseQuery();
+    std::string query = params["query"];
+    std::string path = params.count("path") ? params["path"] : ""; // Default to root or current path
+    bool recursive = params.count("recursive") && params["recursive"] == "true"; // Default to false
+    std::string type = params.count("type") ? params["type"] : "both"; // Default to both files and dirs
+
+    if (query.empty()) 
+    {
+        HttpResponse response;
+        response.setError(400, "Missing query parameter");
+        return response;
+    }
+
+    auto results = file_manager.searchFiles(query, path, recursive, type);
+    json json_results = json::array();
+    for (const auto& file : results) 
+    {
+        json_results.push_back(file.toJson());
+    }
+
+    HttpResponse response;
+    response.setJson(json_results);
+    return response;
+}
+
 HttpResponse Server::handleUploadFile(const HttpRequest& request)
 {
     HttpResponse response;
 
     // Check Content-Type header
     auto ct_it = request.headers.find("Content-Type");
-    if (ct_it == request.headers.end()) {
+    if (ct_it == request.headers.end()) 
+    {
         response.setError(400, "Missing Content-Type header");
         return response;
     }
 
     // Check total request size
-    if (request.body.size() > config.max_upload_size) {
+    if (request.body.size() > config.max_upload_size) 
+    {
         response.setError(413, "Request entity too large. Max size: " +
             std::to_string(config.max_upload_size) + " bytes");
         return response;
@@ -308,13 +346,15 @@ HttpResponse Server::handleUploadFile(const HttpRequest& request)
     // Parse Content-Type to extract boundary
     std::string content_type = ct_it->second;
     size_t boundary_pos = content_type.find("boundary=");
-    if (boundary_pos == std::string::npos) {
+    if (boundary_pos == std::string::npos) 
+    {
         response.setError(400, "Missing boundary in Content-Type");
         return response;
     }
 
     std::string boundary = content_type.substr(boundary_pos + 9);
-    if (!boundary.empty() && boundary.front() == '"' && boundary.back() == '"') {
+    if (!boundary.empty() && boundary.front() == '"' && boundary.back() == '"') 
+    {
         boundary = boundary.substr(1, boundary.length() - 2);
     }
 
@@ -326,12 +366,14 @@ HttpResponse Server::handleUploadFile(const HttpRequest& request)
     size_t file_count = std::count_if(parts.begin(), parts.end(),
         [](const auto& part) { return part.isFile(); });
 
-    if (file_count == 0) {
+    if (file_count == 0) 
+    {
         response.setError(400, "No files found in upload");
         return response;
     }
 
-    if (file_count > config.max_uploads_per_request) {
+    if (file_count > config.max_uploads_per_request) 
+    {
         response.setError(400, "Too many files. Max allowed: " +
             std::to_string(config.max_uploads_per_request));
         return response;
@@ -343,12 +385,15 @@ HttpResponse Server::handleUploadFile(const HttpRequest& request)
     // Create temp directory if it doesn't exist
     std::filesystem::create_directories(config.upload_temp_dir);
 
-    for (const auto& part : parts) {
+    for (const auto& part : parts) 
+    {
         if (!part.isFile()) continue;
 
-        try {
+        try 
+        {
             // Validate filename
-            if (part.filename.empty()) {
+            if (part.filename.empty()) 
+            {
                 errors.push_back("Empty filename not allowed");
                 continue;
             }
@@ -357,34 +402,41 @@ HttpResponse Server::handleUploadFile(const HttpRequest& request)
             std::filesystem::path safe_filename = std::filesystem::path(part.filename).filename();
 
             // Check for directory traversal attempts
-            if (safe_filename.string().find("..") != std::string::npos) {
+            if (safe_filename.string().find("..") != std::string::npos) 
+            {
                 errors.push_back("Invalid filename: " + part.filename);
                 continue;
             }
 
             // Validate extension
-            if (!config.allowed_extensions.empty()) {
+            if (!config.allowed_extensions.empty()) 
+            {
                 std::string ext = safe_filename.extension().string();
                 std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
 
-                bool allowed = std::find(config.allowed_extensions.begin(),
-                    config.allowed_extensions.end(), ext)
-                    != config.allowed_extensions.end();
+                bool allowed = std::find(
+                        config.allowed_extensions.begin(),
+                        config.allowed_extensions.end(), 
+                        ext)
+                        != config.allowed_extensions.end();
 
-                if (!allowed) {
+                if (!allowed) 
+                {
                     errors.push_back("File type not allowed: " + ext);
                     continue;
                 }
             }
 
             // Validate file size
-            if (part.data.size() > config.max_upload_size) {
+            if (part.data.size() > config.max_upload_size) 
+            {
                 errors.push_back("File too large: " + safe_filename.string());
                 continue;
             }
 
             // Validate content type matches extension (basic check)
-            if (!part.content_type.empty()) {
+            if (!part.content_type.empty()) 
+            {
                 bool type_mismatch = false;
                 std::string ext = safe_filename.extension().string();
 
@@ -494,52 +546,63 @@ HttpResponse Server::handleUploadFile(const HttpRequest& request)
                 std::to_string(part.data.size()) + " bytes)");
 
         }
-        catch (const std::filesystem::filesystem_error& e) {
+        catch (const std::filesystem::filesystem_error& e) 
+        {
             errors.push_back("Filesystem error for " + part.filename + ": " + e.what());
             logger.error("Filesystem error: " + std::string(e.what()));
         }
-        catch (const std::exception& e) {
+        catch (const std::exception& e) 
+        {
             errors.push_back("Error uploading " + part.filename + ": " + e.what());
             logger.error("Upload error: " + std::string(e.what()));
         }
     }
 
     // Clean up temp directory
-    try {
-        for (const auto& entry : std::filesystem::directory_iterator(config.upload_temp_dir)) {
-            if (entry.path().extension() == ".tmp") {
+    try 
+    {
+        for (const auto& entry : std::filesystem::directory_iterator(config.upload_temp_dir)) 
+        {
+            if (entry.path().extension() == ".tmp") 
+            {
                 // Remove old temp files (older than 1 hour)
                 auto age = std::filesystem::last_write_time(entry.path()).time_since_epoch();
                 auto now = std::filesystem::file_time_type::clock::now().time_since_epoch();
-                if ((now - age) > std::chrono::hours(1)) {
+                if ((now - age) > std::chrono::hours(1)) 
+                {
                     std::filesystem::remove(entry.path());
                 }
             }
         }
     }
-    catch (...) {
+    catch (...) 
+    {
         // Ignore cleanup errors
     }
 
     // Prepare response
-    json result = {
+    json result = 
+    {
         {"success", !uploaded_files.empty()},
         {"uploaded", uploaded_files},
         {"total_files", file_count},
         {"successful_uploads", uploaded_files.size()}
     };
 
-    if (!errors.empty()) {
+    if (!errors.empty()) 
+    {
         result["errors"] = errors;
     }
 
-    if (uploaded_files.empty() && !errors.empty()) {
+    if (uploaded_files.empty() && !errors.empty()) 
+    {
         response.setError(400, "Upload failed - no files were uploaded successfully");
         std::string json_str = result.dump(2);
         response.body.assign(json_str.begin(), json_str.end());
         response.headers["Content-Type"] = "application/json";
     }
-    else {
+    else 
+    {
         response.setJson(result);
     }
 

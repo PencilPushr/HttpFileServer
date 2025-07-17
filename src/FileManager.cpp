@@ -4,6 +4,8 @@
 #include <sstream>
 #include <chrono>
 
+#include "MIMETypes.h"
+
 FileManager::FileManager(const std::string& root, Logger& log)
     : root_directory(root)
     , logger(log)
@@ -25,18 +27,22 @@ json FileManager::FileInfo::toJson() const
     };
 }
 
-std::vector<FileManager::FileInfo> FileManager::listDirectory(const std::string& relative_path) {
+std::vector<FileManager::FileInfo> FileManager::listDirectory(const std::string& relative_path) 
+{
     std::lock_guard<std::mutex> lock(file_mutex);
     std::vector<FileInfo> files;
 
     std::string full_path = root_directory + "/" + relative_path;
-    if (!isPathSafe(full_path)) {
+    if (!isPathSafe(full_path)) 
+    {
         logger.warning("Unsafe path access attempt: " + relative_path);
         return files;
     }
 
-    try {
-        for (const auto& entry : fs::directory_iterator(full_path)) {
+    try 
+    {
+        for (const auto& entry : fs::directory_iterator(full_path)) 
+        {
             FileInfo info;
             info.name = entry.path().filename().string();
             info.path = relative_path + (relative_path.empty() ? "" : "/") + info.name;
@@ -55,24 +61,114 @@ std::vector<FileManager::FileInfo> FileManager::listDirectory(const std::string&
             files.push_back(info);
         }
     }
-    catch (const std::exception& e) {
+    catch (const std::exception& e) 
+    {
         logger.error("Error listing directory: " + std::string(e.what()));
     }
 
     return files;
 }
 
-std::vector<uint8_t> FileManager::readFile(const std::string& relative_path) {
+std::vector<FileManager::FileInfo> FileManager::searchFiles(
+    const std::string& query, 
+    const std::string& path, 
+    bool recursive, 
+    const std::string& type
+)
+{
+    std::vector<FileInfo> results;
+    std::string full_path = root_directory + "/" + path;
+
+    // Security check to prevent directory traversal attacks
+    if (!isPathSafe(full_path)) 
+    {
+        logger.warning("Unsafe path access attempt: " + path);
+        return results;
+    }
+
+    // Convert query to lowercase for case-insensitive search
+    std::string lower_query = query;
+    std::transform(lower_query.begin(), lower_query.end(), lower_query.begin(), ::tolower);
+
+    // Lambda to process directory entries
+    auto search_func = [&](auto& iter) {
+        
+        for (const auto& entry : iter) 
+        {
+            std::string name = entry.path().filename().string();
+            std::string lower_name = name;
+            std::transform(lower_name.begin(), lower_name.end(), lower_name.begin(), ::tolower);
+
+            // Check if the name contains the query
+            if (lower_name.find(lower_query) != std::string::npos) 
+            {
+                bool is_dir = entry.is_directory();
+                // Filter by type (file, dir, or both)
+                if (type == "both" || (type == "file" && !is_dir) || (type == "dir" && is_dir)) 
+                {
+                    FileInfo info;
+                    info.name = name;
+                    info.path = fs::relative(entry.path(), root_directory).string();
+                    info.is_directory = is_dir;
+                    info.size = is_dir ? 0 : entry.file_size();
+                    info.mime_type = getMimeType(name);
+
+                    // Set modification time
+                    auto time = fs::last_write_time(entry);
+                    auto sctp = std::chrono::time_point_cast<std::chrono::system_clock::duration>(
+                        time - fs::file_time_type::clock::now() + std::chrono::system_clock::now());
+                    std::time_t tt = std::chrono::system_clock::to_time_t(sctp);
+                    std::ostringstream oss;
+                    oss << std::put_time(std::localtime(&tt), "%Y-%m-%d %H:%M:%S");
+                    info.modified = oss.str();
+
+                    results.push_back(info);
+
+                    if (results.size() >= 100) 
+                    {
+                        break;
+                    }
+                }
+            }
+        }
+    };
+
+    // Perform the search (recursive or non-recursive)
+    try 
+    {
+        if (recursive) 
+        {
+            fs::recursive_directory_iterator iter(full_path);
+            search_func(iter);
+        }
+        else 
+        {
+            fs::directory_iterator iter(full_path);
+            search_func(iter);
+        }
+    }
+    catch (const fs::filesystem_error& e) 
+    {
+        logger.error("Filesystem error during search: " + std::string(e.what()));
+    }
+
+    return results;
+}
+
+std::vector<uint8_t> FileManager::readFile(const std::string& relative_path) 
+{
     std::lock_guard<std::mutex> lock(file_mutex);
     std::string full_path = root_directory + "/" + relative_path;
 
-    if (!isPathSafe(full_path)) {
+    if (!isPathSafe(full_path)) 
+    {
         logger.warning("Unsafe file read attempt: " + relative_path);
         return {};
     }
 
     std::ifstream file(full_path, std::ios::binary);
-    if (!file) {
+    if (!file) 
+    {
         logger.warning("File not found: " + relative_path);
         return {};
     }
@@ -82,11 +178,13 @@ std::vector<uint8_t> FileManager::readFile(const std::string& relative_path) {
         std::istreambuf_iterator<char>());
 }
 
-bool FileManager::writeFile(const std::string& relative_path, const std::vector<uint8_t>& data) {
+bool FileManager::writeFile(const std::string& relative_path, const std::vector<uint8_t>& data) 
+{
     std::lock_guard<std::mutex> lock(file_mutex);
     std::string full_path = root_directory + "/" + relative_path;
 
-    if (!isPathSafe(full_path)) {
+    if (!isPathSafe(full_path)) 
+    {
         logger.warning("Unsafe file write attempt: " + relative_path);
         return false;
     }
@@ -95,7 +193,8 @@ bool FileManager::writeFile(const std::string& relative_path, const std::vector<
     fs::create_directories(fs::path(full_path).parent_path());
 
     std::ofstream file(full_path, std::ios::binary);
-    if (!file) {
+    if (!file) 
+    {
         logger.error("Failed to create file: " + relative_path);
         return false;
     }
@@ -103,60 +202,73 @@ bool FileManager::writeFile(const std::string& relative_path, const std::vector<
     file.write(reinterpret_cast<const char*>(data.data()), data.size());
     bool success = file.good();
 
-    if (success) {
+    if (success) 
+    {
         logger.info("File uploaded: " + relative_path + " (" + std::to_string(data.size()) + " bytes)");
     }
-    else {
+    else 
+    {
         logger.error("Failed to write file: " + relative_path);
     }
 
     return success;
 }
 
-bool FileManager::deleteFile(const std::string& relative_path) {
+bool FileManager::deleteFile(const std::string& relative_path) 
+{
     std::lock_guard<std::mutex> lock(file_mutex);
     std::string full_path = root_directory + "/" + relative_path;
 
-    if (!isPathSafe(full_path)) {
+    if (!isPathSafe(full_path)) 
+    {
         logger.warning("Unsafe file delete attempt: " + relative_path);
         return false;
     }
 
     bool success = fs::remove_all(full_path) > 0;
 
-    if (success) {
+    if (success) 
+    {
         logger.info("File deleted: " + relative_path);
     }
-    else {
+    else 
+    {
         logger.warning("Failed to delete file: " + relative_path);
     }
 
     return success;
 }
 
-json FileManager::getStats() {
+json FileManager::getStats() 
+{
     std::lock_guard<std::mutex> lock(file_mutex);
 
     uint64_t total_size = 0;
     int file_count = 0;
     int folder_count = 0;
 
-    try {
-        for (const auto& entry : fs::recursive_directory_iterator(root_directory)) {
-            if (entry.is_directory()) {
+    try 
+    {
+        for (const auto& entry : fs::recursive_directory_iterator(root_directory)) 
+        {
+            if (entry.is_directory()) 
+            {
                 folder_count++;
             }
-            else {
+            else 
+            {
                 file_count++;
                 total_size += entry.file_size();
             }
         }
     }
-    catch (const std::exception& e) {
+    catch (const std::exception& e) 
+    {
         logger.error("Error calculating stats: " + std::string(e.what()));
     }
 
-    return json{
+    return json
+    {
         {"total_files", file_count},
         {"total_folders", folder_count},
         {"total_size", total_size},
@@ -169,7 +281,8 @@ bool FileManager::fileExists(const std::string& relative_path) const
     std::lock_guard<std::mutex> lock(file_mutex);
     std::string full_path = root_directory + "/" + relative_path;
 
-    if (!isPathSafe(full_path)) {
+    if (!isPathSafe(full_path)) 
+    {
         return false;
     }
 
@@ -178,7 +291,8 @@ bool FileManager::fileExists(const std::string& relative_path) const
 
 std::string FileManager::generateUniqueFilename(const std::string& relative_path) const
 {
-    if (!fileExists(relative_path)) {
+    if (!fileExists(relative_path)) 
+    {
         return relative_path;
     }
 
@@ -192,10 +306,12 @@ std::string FileManager::generateUniqueFilename(const std::string& relative_path
 
     do {
         std::string new_filename = base + "_" + std::to_string(counter) + ext;
-        if (!dir.empty()) {
+        if (!dir.empty()) 
+        {
             new_path = dir + "/" + new_filename;
         }
-        else {
+        else 
+        {
             new_path = new_filename;
         }
         counter++;
@@ -204,37 +320,31 @@ std::string FileManager::generateUniqueFilename(const std::string& relative_path
     return new_path;
 }
 
-bool FileManager::isPathSafe(const std::string& path) const {
-    try {
+bool FileManager::isPathSafe(const std::string& path) const 
+{
+    try 
+    {
         fs::path canonical_root = fs::canonical(fs::absolute(root_directory));
         fs::path canonical_path = fs::canonical(fs::absolute(path));
 
         auto rel = fs::relative(canonical_path, canonical_root);
         return !rel.string().starts_with("..");
     }
-    catch (const std::exception&) {
+    catch (const std::exception&) 
+    {
         // If canonicalization fails, assume unsafe
         return false;
     }
 }
 
-std::string FileManager::getMimeType(const std::string& filename) const {
-    std::string ext = fs::path(filename).extension().string();
-    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-
-    static std::map<std::string, std::string> mime_types = {
-        {".html", "text/html"}, {".css", "text/css"}, {".js", "application/javascript"},
-        {".json", "application/json"}, {".txt", "text/plain"}, {".pdf", "application/pdf"},
-        {".jpg", "image/jpeg"}, {".jpeg", "image/jpeg"}, {".png", "image/png"},
-        {".gif", "image/gif"}, {".mp4", "video/mp4"}, {".mp3", "audio/mpeg"},
-        {".zip", "application/zip"}, {".xlsx", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"}
-    };
-
-    auto it = mime_types.find(ext);
-    return it != mime_types.end() ? it->second : "application/octet-stream";
+std::string FileManager::getMimeType(const std::string& filename) const 
+{
+    // fallback to application/octet-stream
+    return MimeTypes::get(filename, "application/octet-stream");
 }
 
-std::string FileManager::formatFileSize(uint64_t size) {
+std::string FileManager::formatFileSize(uint64_t size) 
+{
     const char* units[] = { "B", "KB", "MB", "GB", "TB" };
     int unit = 0;
     double s = static_cast<double>(size);
@@ -262,7 +372,8 @@ FileManager::UploadResult FileManager::uploadFile(const std::string& filename,
     std::filesystem::path safe_filename = std::filesystem::path(filename).filename();
 
     // Validate filename
-    if (safe_filename.string().empty() || safe_filename.string().find("..") != std::string::npos) {
+    if (safe_filename.string().empty() || safe_filename.string().find("..") != std::string::npos) 
+    {
         result.success = false;
         result.error = "Invalid filename";
         return result;
@@ -270,7 +381,8 @@ FileManager::UploadResult FileManager::uploadFile(const std::string& filename,
 
     // Build relative path
     std::string relative_path;
-    if (!target_dir.empty()) {
+    if (!target_dir.empty()) 
+    {
         // Sanitize target directory
         std::string safe_dir = target_dir;
         std::replace(safe_dir.begin(), safe_dir.end(), '\\', '/');
@@ -290,12 +402,14 @@ FileManager::UploadResult FileManager::uploadFile(const std::string& filename,
 
         relative_path = safe_dir + "/" + safe_filename.string();
     }
-    else {
+    else 
+    {
         relative_path = safe_filename.string();
     }
 
     // Handle existing files
-    if (!allow_overwrite && fileExists(relative_path)) {
+    if (!allow_overwrite && fileExists(relative_path)) 
+    {
         relative_path = generateUniqueFilename(relative_path);
         safe_filename = std::filesystem::path(relative_path).filename();
     }
@@ -307,7 +421,8 @@ FileManager::UploadResult FileManager::uploadFile(const std::string& filename,
     result.relative_path = relative_path;
     result.final_filename = safe_filename.string();
 
-    if (!success) {
+    if (!success) 
+    {
         result.error = "Failed to write file";
     }
 

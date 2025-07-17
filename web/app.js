@@ -19,7 +19,12 @@
         });
 
         document.getElementById('uploadBtn').addEventListener('click', () => {
-            this.triggerFileSelect();
+            const files = document.getElementById('fileInput').files;
+            if (files.length > 0) {
+                this.uploadFiles(files);
+            } else {
+                this.triggerFileSelect();
+            }
         });
 
         // View controls
@@ -253,11 +258,151 @@
 
     handleFileSelect(files) {
         if (files.length === 0) return;
-        
+
         this.showToast(`Selected ${files.length} file(s) for upload`, 'success');
-        // For now, just show a message. Upload functionality would be implemented here.
-        // You would need to implement multipart form data parsing in the C++ backend
-        console.log('Files selected for upload:', Array.from(files).map(f => f.name));
+        this.uploadFiles(files);
+    }
+
+    async uploadFiles(files) {
+        console.log('uploadFiles called with', files.length, 'files');
+
+        const uploadProgress = document.getElementById('uploadProgress');
+        const progressFill = document.getElementById('progressFill');
+        const progressText = document.getElementById('progressText');
+
+        // Show upload progress
+        uploadProgress.classList.remove('hidden');
+
+        try {
+            const formData = new FormData();
+
+            // Add each file to the form data
+            Array.from(files).forEach((file, index) => {
+                console.log(`Adding file ${index}:`, file.name, file.size, 'bytes');
+                formData.append('files', file);
+            });
+
+            // Add current directory if we're not in root
+            if (this.currentPath) {
+                formData.append('directory', this.currentPath);
+                console.log('Upload directory:', this.currentPath);
+            }
+
+            // Log FormData contents
+            console.log('FormData entries:');
+            for (let pair of formData.entries()) {
+                console.log(pair[0] + ':', pair[1]);
+            }
+
+            // Create XMLHttpRequest for progress tracking
+            const xhr = new XMLHttpRequest();
+
+            // Track upload progress
+            xhr.upload.addEventListener('progress', (e) => {
+                if (e.lengthComputable) {
+                    const percentComplete = (e.loaded / e.total) * 100;
+                    progressFill.style.width = percentComplete + '%';
+                    progressText.textContent = `Uploading... ${Math.round(percentComplete)}%`;
+                    console.log('Upload progress:', Math.round(percentComplete) + '%');
+                }
+            });
+
+            // Handle completion
+            xhr.addEventListener('load', () => {
+                console.log('Upload complete. Status:', xhr.status);
+                console.log('Response:', xhr.responseText);
+
+                if (xhr.status === 200) {
+                    try {
+                        const response = JSON.parse(xhr.responseText);
+                        console.log('Parsed response:', response);
+
+                        if (response.success) {
+                            this.showToast(`Successfully uploaded ${response.uploaded.length} file(s)`, 'success');
+
+                            // Show any errors if some files failed
+                            if (response.errors && response.errors.length > 0) {
+                                response.errors.forEach(error => {
+                                    this.showToast(error, 'warning');
+                                });
+                            }
+
+                            // Refresh the file list and stats
+                            this.refresh();
+                        } else {
+                            this.showError('Upload failed: ' + (response.message || 'Unknown error'));
+                        }
+                    } catch (e) {
+                        console.error('Failed to parse response:', e);
+                        this.showError('Upload failed: Invalid response from server');
+                    }
+                } else {
+                    this.showError(`Upload failed: HTTP ${xhr.status}`);
+                }
+
+                // Hide progress bar
+                setTimeout(() => {
+                    uploadProgress.classList.add('hidden');
+                    progressFill.style.width = '0%';
+                }, 1000);
+            });
+
+            // Handle errors
+            xhr.addEventListener('error', (e) => {
+                console.error('Upload error:', e);
+                this.showError('Upload failed: Network error');
+                uploadProgress.classList.add('hidden');
+                progressFill.style.width = '0%';
+            });
+
+            // Log request details
+            console.log('Sending POST request to /api/upload');
+
+            // Send the request
+            xhr.open('POST', '/api/upload');
+            xhr.send(formData);
+
+        } catch (error) {
+            console.error('Upload error:', error);
+            this.showError('Upload failed: ' + error.message);
+            uploadProgress.classList.add('hidden');
+            progressFill.style.width = '0%';
+        }
+    }
+
+    // Add this function to your app.js temporarily for testing
+    async testUploadEndpoint() {
+        console.log('Testing upload endpoint...');
+
+        // Create a simple test file
+        const testContent = 'This is a test file';
+        const testBlob = new Blob([testContent], { type: 'text/plain' });
+        const testFile = new File([testBlob], 'test.txt', { type: 'text/plain' });
+
+        const formData = new FormData();
+        formData.append('files', testFile);
+
+        try {
+            const response = await fetch('/api/upload', {
+                method: 'POST',
+                body: formData
+            });
+
+            console.log('Test response status:', response.status);
+            const text = await response.text();
+            console.log('Test response body:', text);
+
+            if (response.ok) {
+                try {
+                    const json = JSON.parse(text);
+                    console.log('Parsed JSON:', json);
+                } catch (e) {
+                    console.log('Response is not JSON');
+                }
+            }
+        } catch (error) {
+            console.error('Test failed:', error);
+        }
     }
 
     async downloadFile(path) {

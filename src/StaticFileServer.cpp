@@ -2,6 +2,7 @@
 
 #include <vector>
 #include <filesystem>
+#include "MIMETypes.h"
 
 namespace fs = std::filesystem;
 
@@ -29,7 +30,8 @@ HttpResponse StaticFileServer::serveFile(const std::string& path)
     logger.info("File exists: " + std::string(fs::exists(file_path) ? "YES" : "NO"));
 
     std::ifstream file(file_path, std::ios::binary);
-    if (!file) {
+    if (!file) 
+    {
         response.status_code = 404;
         response.setError(404, "File not found");
         logger.warning("Static file not found: " + file_path);
@@ -49,16 +51,7 @@ HttpResponse StaticFileServer::serveFile(const std::string& path)
 
 std::string StaticFileServer::getMimeType(const std::string& filename)
 {
-    std::string ext = fs::path(filename).extension().string();
-    std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
-
-    static std::map<std::string, std::string> mime_types = {
-        {".html", "text/html"}, {".css", "text/css"}, {".js", "application/javascript"},
-        {".png", "image/png"}, {".jpg", "image/jpeg"}, {".gif", "image/gif"},
-        {".svg", "image/svg+xml"}, {".ico", "image/x-icon"}
-    };
-
-    auto it = mime_types.find(ext);
-    return it != mime_types.end() ? it->second : "text/plain";
+    // fallback to text/plain
+    return MimeTypes::get(filename, "text/plain");
 }
 

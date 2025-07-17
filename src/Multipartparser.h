@@ -4,9 +4,11 @@
 #include <map>
 #include <sstream>
 
-class MultipartParser {
+class MultipartParser 
+{
 public:
-    struct Part {
+    struct Part 
+    {
         std::map<std::string, std::string> headers;
         std::string name;
         std::string filename;

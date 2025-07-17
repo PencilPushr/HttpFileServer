@@ -76,7 +76,7 @@ public:
     void send(const std::string& data);
     std::string receive(size_t size);
 
-    // 3. Get client address from accepted socket
+    // Get client address from accepted socket
     std::string getRemoteAddress() const;
     std::string getLocalAddress() const;
     int getLocalPort() const;

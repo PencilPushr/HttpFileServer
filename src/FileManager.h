@@ -56,6 +56,13 @@ public:
         bool allow_overwrite = false);
 
     std::vector<FileInfo> listDirectory(const std::string& relative_path = "");
+    
+    std::vector<FileInfo> searchFiles(
+        const std::string& query,
+        const std::string& path, 
+        bool recursive, 
+        const std::string& type
+    );
     std::vector<uint8_t> readFile(const std::string& relative_path);
     bool writeFile(const std::string& relative_path, const std::vector<uint8_t>& data);
     bool deleteFile(const std::string& relative_path);

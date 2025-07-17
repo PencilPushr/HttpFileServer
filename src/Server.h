@@ -47,4 +47,5 @@ private:
     HttpResponse handleDownloadFile(const HttpRequest& request);
     HttpResponse handleUploadFile(const HttpRequest& request);
     HttpResponse handleGetStats(const HttpRequest& request);
+    HttpResponse handleSearch(const HttpRequest& request);
 };

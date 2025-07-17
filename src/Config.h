@@ -6,7 +6,6 @@
 
 class Config
 {
-	// Public for now, but these will go back to private in V1.1
 public:
 	int port = 8080;
 	std::string rootDir = "./files";
@@ -14,7 +13,7 @@ public:
 	std::string logFile = "server.log";
 	bool enable_cors = true;
 	bool enable_logging = true;
-	size_t max_upload_size = 10 * 1024 * 1024;  // 10MB default
+	size_t max_upload_size = 50 * 1024 * 1024;  // 10MB default
 	size_t max_uploads_per_request = 10;
 	std::vector<std::string> allowed_extensions = {
 		".txt", ".pdf", ".jpg", ".jpeg", ".png", ".gif",

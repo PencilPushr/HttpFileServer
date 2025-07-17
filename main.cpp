@@ -5,8 +5,10 @@
 
 #include "Server.h"
 
-int main() {
-    try {
+int main() 
+{
+    try 
+    {
         Config config;
         Server server(config);
 
