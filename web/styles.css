@@ -205,7 +205,7 @@ header {
     }
 
     .breadcrumb-item:not(:last-child)::after {
-        content: '›';
+        content: '>';
         margin-left: 8px;
         color: #ccc;
     }
@@ -214,6 +214,50 @@ header {
     display: flex;
     gap: 5px;
 }
+
+/* Search functionality */
+.search-container {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    position: relative;
+}
+
+.search-input {
+    padding: 8px 16px;
+    border: 2px solid #e9ecef;
+    border-radius: 24px;
+    font-size: 0.9em;
+    width: 250px;
+    transition: all 0.3s ease;
+    background: #f8f9fa;
+}
+
+    .search-input:focus {
+        outline: none;
+        border-color: #007bff;
+        background: white;
+        width: 300px;
+        box-shadow: 0 4px 12px rgba(0,123,255,0.1);
+    }
+
+    .search-input::placeholder {
+        color: #999;
+    }
+
+.search-results-info {
+    text-align: center;
+    padding: 15px;
+    background: #f8f9fa;
+    border-radius: 8px;
+    margin-bottom: 20px;
+    font-size: 0.9em;
+    color: #666;
+}
+
+    .search-results-info strong {
+        color: #007bff;
+    }
 
 /* File list */
 .file-list {

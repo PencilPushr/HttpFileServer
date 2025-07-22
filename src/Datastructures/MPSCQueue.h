@@ -14,7 +14,7 @@ private:
 
     struct Node 
     {
-        std::atomic<Node*> next{ nullptr };
+        std::atomic<Node*>  next{ nullptr };
         T                   value;
         Node(T&& v) : value(std::move(v)) {}
     };
