@@ -17,7 +17,8 @@ Server::Server(const Config& cfg)
     setupRoutes();
 }
 
-Server::~Server() {
+Server::~Server() 
+{
     stop();
 }
 
@@ -27,7 +28,8 @@ void Server::initializeSocket()
     {
         m_socket = Socket::createServerSocket("0.0.0.0", config.port);
     }
-    catch (const std::exception& e) {
+    catch (const std::exception& e) 
+    {
         throw std::runtime_error("Failed to initialize server socket: " + std::string(e.what()));
     }
 }

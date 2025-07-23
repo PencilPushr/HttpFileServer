@@ -10,22 +10,7 @@ Now has search, and a media player type
 This is finished for now. 
 But V2 should ideally work towards a proper prod ready server
 It is currently missing:
-
-	- Async I/O -> Concurrent acception: 
-		- epoll/kqueue/io_uring (unix), IOCP/APC (windows)
+	- Concurrent acception: kqueue/io_uring/
 		- ThreadPool instead of allocating a new thread everytime
 	- Rate limiting
-	- Session management/authentication
-		- Guest/User/Admin
-		- Login -> username/passwords
-	- Lock-free instead of blocking for: 
-		- Logging (MPSC lock-free queue)
-		- Session management (when implemented)
-	- Directory list caching
-	- Incremental grabbing
-	- OpenSSL/Encryption
-
-	// ... Probably more
-
-
-	
+	- 
