@@ -201,7 +201,7 @@ std::vector<uint8_t> FileManager::readFileRange( const std::string& relative_pat
     size_t fileSize = file.tellg( );
 
     size_t fileRangeStart = start;
-    size_t fileRangeEnd = end == -1 ? fileSize : end;
+    size_t fileRangeEnd = end == -1 ? fileSize - 1 : end;
 
     if ( fileRangeStart >= fileSize || fileRangeEnd > fileSize || fileRangeStart > fileRangeEnd )
     {

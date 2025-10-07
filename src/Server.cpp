@@ -368,14 +368,14 @@ HttpResponse Server::handleDownloadFile(const HttpRequest& request)
     //
     // client is asking for a full file download
     //
-    auto fileData = file_manager.readFile(params.at("file"));
+    auto fileData = file_manager.readFile( wantedFile );
     if (fileData.empty()) 
     {
         response.setError(404, "File not found");
         return response;
     }
 
-    response.body = fileData;
+    response.body = std::move( fileData );
     response.headers["Content-Type"] = "application/octet-stream";
     response.headers["Content-Disposition"] = "attachment; filename=\"" + fs::path(params.at("file")).filename().string() + "\"";
     response.status_code = 200;
