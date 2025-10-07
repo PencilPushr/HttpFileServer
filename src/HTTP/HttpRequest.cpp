@@ -47,7 +47,6 @@ HttpRequest HttpRequest::parse(const std::string& raw_request, const std::string
     auto content_length_it = req.headers.find("Content-Length");
     if (content_length_it != req.headers.end()) 
     {
-        int content_length = std::stoi(content_length_it->second);
         std::string remaining_data((std::istreambuf_iterator<char>(stream)),
             std::istreambuf_iterator<char>());
         req.body = std::vector<uint8_t>(remaining_data.begin(), remaining_data.end());

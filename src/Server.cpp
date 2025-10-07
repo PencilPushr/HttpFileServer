@@ -134,7 +134,7 @@ void Server::handleClient(Socket client_socket, const std::string& client_ip)
             auto it = request.headers.find("Content-Length");
             if (it != request.headers.end()) 
             {
-                int content_length = std::stoi(it->second);
+                size_t content_length = std::stoull(it->second);
                 if (content_length > 0) 
                 {
                     request.body.resize(content_length);
@@ -410,23 +410,13 @@ HttpResponse Server::handleUploadFile(const HttpRequest& request)
                 continue;
             }
 
-            // Validate extension
-            if (!config.allowed_extensions.empty()) 
+            std::string ext = safe_filename.extension( ).string( );
+            std::transform( ext.begin( ), ext.end( ), ext.begin( ), ::tolower );
+            if ( config.blacklisted_extensions.contains( ext ) )
             {
-                std::string ext = safe_filename.extension().string();
-                std::transform(ext.begin(), ext.end(), ext.begin(), ::tolower);
+                errors.push_back( "File type not allowed: " + ext );
 
-                bool allowed = std::find(
-                        config.allowed_extensions.begin(),
-                        config.allowed_extensions.end(), 
-                        ext)
-                        != config.allowed_extensions.end();
-
-                if (!allowed) 
-                {
-                    errors.push_back("File type not allowed: " + ext);
-                    continue;
-                }
+                continue;
             }
 
             // Validate file size
