@@ -64,11 +64,13 @@ public:
         const std::string& type
     );
     std::vector<uint8_t> readFile(const std::string& relative_path);
+    std::vector<uint8_t> readFileRange( const std::string& relative_path, size_t start, size_t end );
     bool writeFile(const std::string& relative_path, const std::vector<uint8_t>& data);
     bool deleteFile(const std::string& relative_path);
     json getStats();
     bool fileExists(const std::string& relative_path) const;
     std::string generateUniqueFilename(const std::string& relative_path) const;
+    size_t getFileSize( const std::string& relative_path ) const;
 
 private:
     bool isPathSafe(const std::string& path) const;

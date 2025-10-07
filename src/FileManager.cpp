@@ -157,25 +157,92 @@ std::vector<FileManager::FileInfo> FileManager::searchFiles(
 
 std::vector<uint8_t> FileManager::readFile(const std::string& relative_path) 
 {
-    std::lock_guard<std::mutex> lock(file_mutex);
+    return readFileRange( relative_path, 0, -1 );
+    //std::lock_guard<std::mutex> lock(file_mutex);
+    //std::string full_path = root_directory + "/" + relative_path;
+    //
+    //if (!isPathSafe(full_path)) 
+    //{
+    //    logger.warning("Unsafe file read attempt: " + relative_path);
+    //    return {};
+    //}
+    //
+    //std::ifstream file(full_path, std::ios::binary);
+    //if (!file) 
+    //{
+    //    logger.warning("File not found: " + relative_path);
+    //    return {};
+    //}
+    //
+    //logger.info("File downloaded: " + relative_path);
+    //return std::vector<uint8_t>((std::istreambuf_iterator<char>(file)),
+    //    std::istreambuf_iterator<char>());
+}
+
+std::vector<uint8_t> FileManager::readFileRange( const std::string& relative_path, size_t start, size_t end )
+{
+    std::lock_guard<std::mutex> lock( file_mutex );
     std::string full_path = root_directory + "/" + relative_path;
 
-    if (!isPathSafe(full_path)) 
+    if ( !isPathSafe( full_path ) )
     {
-        logger.warning("Unsafe file read attempt: " + relative_path);
+        logger.warning( "Unsafe file read attempt: " + relative_path );
         return {};
     }
 
-    std::ifstream file(full_path, std::ios::binary);
-    if (!file) 
+    std::ifstream file( full_path, std::ios::binary );
+    if ( !file )
     {
-        logger.warning("File not found: " + relative_path);
+        logger.warning( "File not found: " + relative_path );
         return {};
     }
 
-    logger.info("File downloaded: " + relative_path);
-    return std::vector<uint8_t>((std::istreambuf_iterator<char>(file)),
-        std::istreambuf_iterator<char>());
+    file.seekg( 0, std::ios::end );
+    size_t fileSize = file.tellg( );
+
+    size_t fileRangeStart = start;
+    size_t fileRangeEnd = end == -1 ? fileSize : end;
+
+    if ( fileRangeStart >= fileSize || fileRangeEnd > fileSize || fileRangeStart > fileRangeEnd )
+    {
+        logger.error( "File range mismatch" );
+        return {};
+    }
+
+    std::vector<uint8_t> fileData = { };
+    fileData.resize( ( fileRangeEnd - fileRangeStart ) + 1 );
+
+    file.seekg( fileRangeStart, std::ios::beg );
+    if ( !file.read( ( char* )fileData.data( ), fileData.size( ) ) )
+    {
+        logger.error( "Failed to read file" );
+        return {};
+    }
+
+    logger.info( "File downloaded range: " + relative_path );
+    return fileData;
+}
+
+size_t FileManager::getFileSize( const std::string& relative_path ) const
+{
+    std::lock_guard<std::mutex> lock( file_mutex );
+    std::string full_path = root_directory + "/" + relative_path;
+
+    if ( !isPathSafe( full_path ) )
+    {
+        logger.warning( "Unsafe file read attempt: " + relative_path );
+        return {};
+    }
+
+    std::ifstream file( full_path, std::ios::binary );
+    if ( !file )
+    {
+        logger.warning( "File not found: " + relative_path );
+        return {};
+    }
+
+    file.seekg( 0, std::ios::end );
+    return file.tellg( );
 }
 
 bool FileManager::writeFile(const std::string& relative_path, const std::vector<uint8_t>& data) 

@@ -48,4 +48,8 @@ private:
     HttpResponse handleUploadFile(const HttpRequest& request);
     HttpResponse handleGetStats(const HttpRequest& request);
     HttpResponse handleSearch(const HttpRequest& request);
+
+private:
+
+    HttpResponse handleDownloadFileRange( const HttpRequest& request, const std::string& rangesHeader, const std::string& file );
 };

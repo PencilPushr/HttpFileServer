@@ -4,6 +4,7 @@
 #include <iostream>
 
 #include "Multipartparser.h"
+#include "HTTP/HttpParse.h"
 
 namespace fs = std::filesystem;
 
@@ -126,6 +127,12 @@ void Server::handleClient(Socket client_socket, const std::string& client_ip)
 
         // Parse the request
         HttpRequest request = HttpRequest::parse(request_data, client_ip);
+
+        logger.info( "Parsed client request headers as:" );
+        for ( auto& Header : request.headers )
+        {
+            logger.info( "\t[" + Header.first + "] = " + Header.second );
+        }
 
         // If this is a POST/PUT request, we might need to read the body
         if (request.method == "POST" || request.method == "PUT") 
@@ -263,6 +270,74 @@ HttpResponse Server::handleDeleteFile(const HttpRequest& request)
     return response;
 }
 
+HttpResponse Server::handleDownloadFileRange( const HttpRequest& request, const std::string& rangesHeader, const std::string& file )
+{
+    HttpResponse response;
+
+    HTTP_PARSED_BYTE_RANGE byteRange = { };
+    if ( HttpParseRangeHeader( rangesHeader, &byteRange ) == FALSE )
+    {
+        response.setError( 400, "Invalid request" );
+        return response;
+    }
+
+    size_t fileSize = file_manager.getFileSize( file );
+    if ( fileSize == NULL )
+    {
+        response.setError( 400, "Invalid request" );
+        return response;
+    }
+
+    ULONG64 fileStart = 0;
+    ULONG64 fileEnd = 0;
+
+    constexpr size_t maxFileRange = 1 * 1024 * 1024;
+    if ( byteRange.HasStart && byteRange.HasEnd )
+    {
+        fileStart = byteRange.Start;
+        fileEnd = byteRange.End;
+    }
+    else if ( byteRange.HasStart && !byteRange.HasEnd )
+    {
+        fileStart = byteRange.Start;
+        fileEnd = min( min( fileStart + ( maxFileRange - 1 ), fileStart + ( fileSize - 1 ) ), ( fileSize - 1 ) );
+    }
+    else if ( byteRange.HasEnd && !byteRange.HasStart )
+    {
+        if ( byteRange.End < fileSize )
+        {
+            fileStart = fileSize - byteRange.End;
+        }
+
+        fileEnd = fileSize - 1;
+    }
+
+    if ( fileStart >= fileSize || fileEnd >= fileSize || fileStart > fileEnd )
+    {
+        response.status_code = 416;
+        response.headers[ "Content-Range" ] = "bytes */" + std::to_string( fileSize );
+        return response;
+    }
+
+    std::vector<uint8_t> fileRangeData = file_manager.readFileRange( file, fileStart, fileEnd );
+    if ( fileRangeData.empty( ) )
+    {
+        response.setError( 400, "Failed to retrieve file data" );
+        return response;
+    }
+
+    response.headers[ "Accept-Ranges" ] = "bytes";
+    response.headers[ "Content-Range" ] = "bytes " + std::to_string( fileStart ) + "-" + std::to_string( fileEnd ) + "/" + std::to_string( fileSize );
+    response.headers[ "Content-Length" ] = std::to_string( fileRangeData.size( ) );
+    response.headers[ "Content-Type" ] = "application/octet-stream";
+
+    response.body = std::move( fileRangeData );
+
+    response.status_code = 206;
+
+    return response;
+}
+
 HttpResponse Server::handleDownloadFile(const HttpRequest& request)
 {
     HttpResponse response;
@@ -274,6 +349,25 @@ HttpResponse Server::handleDownloadFile(const HttpRequest& request)
         return response;
     }
 
+    std::string wantedFile = params.at( "file" );
+    if ( !file_manager.fileExists( wantedFile ) )
+    {
+        response.setError( 400, "File does not exist" );
+        return response;
+    }
+
+    //
+    // client is asking for part of a file
+    //
+    const auto& contentRange = request.headers.find( "Range" );
+    if ( contentRange != request.headers.end( ) )
+    {
+        return handleDownloadFileRange( request, contentRange->second, wantedFile );
+    }
+
+    //
+    // client is asking for a full file download
+    //
     auto fileData = file_manager.readFile(params.at("file"));
     if (fileData.empty()) 
     {
@@ -283,8 +377,7 @@ HttpResponse Server::handleDownloadFile(const HttpRequest& request)
 
     response.body = fileData;
     response.headers["Content-Type"] = "application/octet-stream";
-    response.headers["Content-Disposition"] = "attachment; filename=\"" +
-        fs::path(params.at("file")).filename().string() + "\"";
+    response.headers["Content-Disposition"] = "attachment; filename=\"" + fs::path(params.at("file")).filename().string() + "\"";
     response.status_code = 200;
 
     return response;
