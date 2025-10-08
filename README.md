@@ -7,6 +7,7 @@ Feel free to the steal code, it's what I did to make this.
 
 ## Current view
 *Note: requires knowing the devices ip or if testing locally using localhost along with the preferred port (default is 8080)*
+
 <img width="1911" height="1080" alt="image" src="https://github.com/user-attachments/assets/248494cb-b1eb-456b-a2c4-d26c5c0433a9" />
 
 ## Version details
