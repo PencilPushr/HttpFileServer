@@ -5,6 +5,10 @@ Use this only as a learning device, as you will see below, this is very much a W
 WIP: Needs several security features, backups and other features for more production ready code, but should be fine if you run this off a raspberry pi and on your local network.
 Feel free to the steal code, it's what I did to make this.
 
+## Current view
+*Note: requires knowing the devices ip or if testing locally using localhost along with the preferred port (default is 8080)*
+<img width="1911" height="1080" alt="image" src="https://github.com/user-attachments/assets/248494cb-b1eb-456b-a2c4-d26c5c0433a9" />
+
 ## Version details
  - Version are as follows:
  - V1.0 The first iteration, it uses raw sockets, http, no protection and the underlying file system to manage the files.
